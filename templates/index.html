@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Метеостанція Pro v2.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f6f8; padding: 20px; color: #333; }
+        
+        /* Header */
+        header { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+        h1 { margin: 0; color: #2c3e50; font-size: 1.8em; }
+
+        /* Speed Control */
+        .speed-control { 
+            background: #f8f9fa; padding: 10px 20px; border-radius: 8px; border: 1px solid #eee;
+            display: flex; align-items: center; gap: 15px; 
+        }
+        input[type=range] { width: 150px; cursor: pointer; }
+        .speed-label { font-weight: bold; color: #3498db; min-width: 60px; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 15px; border-bottom: 2px solid #e0e0e0; margin-top: 20px;}
+        .tab-btn { padding: 12px 25px; border: none; background: none; font-size: 1.1em; font-weight: 600; cursor: pointer; color: #7f8c8d; border-bottom: 3px solid transparent; transition: 0.3s; }
+        .tab-btn.active { color: #3498db; border-bottom: 3px solid #3498db; }
+        .tab-btn:hover { color: #3498db; background: rgba(52,152,219,0.05); }
+
+        .tab-content { display: none; animation: fadeIn 0.4s; padding-top: 20px; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Cards & Grid */
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+        .sensor-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.03); border-left: 5px solid #3498db; transition: transform 0.2s; }
+        .sensor-card:hover { transform: translateY(-3px); }
+        .alert-mode { border-left-color: #e74c3c !important; background-color: #fff9f9; }
+        .card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+        .sensor-value { font-size: 1.8em; font-weight: 800; color: #2c3e50; }
+        .unit { font-size: 0.5em; color: #7f8c8d; }
+        
+        .stats-row { display: flex; justify-content: space-between; background: #f8f9fa; padding: 8px; border-radius: 8px; margin-top: 15px; font-size: 0.85em; }
+        .stat-item { text-align: center; } .stat-val { font-weight: bold; }
+        
+        .status-badge { margin-left: auto; font-size: 0.8em; padding: 4px 8px; border-radius: 4px; background: #eee; }
+        .status-active { color: #27ae60; background: #eafaf1; } .status-stopped { color: #c0392b; background: #fdedec; }
+
+        button { border: none; border-radius: 6px; cursor: pointer; font-weight: 600; padding: 6px 12px; color: white; transition: 0.2s;}
+        .btn-green { background: #2ecc71; } .btn-green:hover { background: #27ae60; }
+        .btn-red { background: #e74c3c; } .btn-red:hover { background: #c0392b; }
+        .btn-lg { padding: 10px 20px; font-size: 1em; }
+        
+        /* Console */
+        .console-container { margin-top: 30px; background: #1e1e1e; border-radius: 8px; padding: 15px; color: #d4d4d4; font-family: monospace; font-size: 0.9em; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .console-header { border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 10px; color: #9cdcfe; font-weight: bold; }
+        .console-body { height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; scroll-behavior: smooth; }
+        .log-entry { display: flex; gap: 10px; }
+        .log-time { color: #569cd6; min-width: 70px; }
+        .log-warning { color: #ce9178; font-weight: bold; } .log-system { color: #c586c0; font-weight: bold; } .log-info { color: #4ec9b0; }
+
+        /* History Table */
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; margin-top: 10px;}
+        th, td { padding: 10px 15px; text-align: left; border-bottom: 1px solid #eee; } th { background: #f8f9fa; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-row">
+            <h1>🌤️ Метеостанція Pro</h1>
+            
+            <div class="speed-control">
+                <span>⚡ Швидкість оновлення:</span>
+                <input type="range" id="speedRange" min="0.5" max="5.0" step="0.5" value="{{ current_interval }}" onchange="changeSpeed(this.value)" oninput="document.getElementById('speedVal').innerText = this.value + 's'">
+                <span id="speedVal" class="speed-label">{{ current_interval }}s</span>
+            </div>
+
+            <div>
+                <button class="btn-lg btn-green" onclick="globalControl('start-all')">▶ Всі старт</button>
+                <button class="btn-lg btn-red" onclick="globalControl('stop-all')">⏹ Всі стоп</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="openTab('dashboard')">📊 Панель</button>
+            <button class="tab-btn" onclick="openTab('history')">📜 Архів</button>
+        </div>
+    </header>
+
+    <div id="dashboard" class="tab-content active">
+        <div class="grid-container">
+            {% for id, info in sensors.items() %}
+            <div class="sensor-card" id="card-{{ id }}">
+                <div class="card-header">
+                    <span style="font-weight:bold;">{{ info.name }}</span>
+                    <span class="sensor-value" id="val-{{ id }}">--<span class="unit">{{ info.unit }}</span></span>
+                </div>
+                <div style="display:flex; gap:5px; margin-bottom:10px; align-items:center;">
+                    <button class="btn-green" onclick="controlSensor('{{ id }}', 'start')">Start</button>
+                    <button class="btn-red" onclick="controlSensor('{{ id }}', 'stop')">Stop</button>
+                    <span id="status-{{ id }}" class="status-badge {% if info.active %}status-active{% else %}status-stopped{% endif %}">{% if info.active %}Active{% else %}Stopped{% endif %}</span>
+                </div>
+                <canvas id="chart-{{ id }}" style="max-height:100px; width:100%;"></canvas>
+                <div class="stats-row">
+                    <div class="stat-item"><span style="color:#aaa;">MIN</span><br><span class="stat-val" id="min-{{ id }}">--</span></div>
+                    <div class="stat-item"><span style="color:#aaa;">AVG</span><br><span class="stat-val" id="avg-{{ id }}">--</span></div>
+                    <div class="stat-item"><span style="color:#aaa;">MAX</span><br><span class="stat-val" id="max-{{ id }}">--</span></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="console-container">
+            <div class="console-header">> System Events Log</div>
+            <div class="console-body" id="console-logs"></div>
+        </div>
+    </div>
+
+    <div id="history" class="tab-content">
+        <div style="background:white; padding:20px; border-radius:12px;">
+            <div style="display:flex; justify-content:space-between;">
+                <h2>📋 Журнал</h2>
+                <div>
+                    <button class="btn-lg btn-red" onclick="clearHistory()">🗑 Очистити</button>
+                    <a href="/download-log" style="text-decoration:none; background:#3498db; color:white; padding:10px 20px; border-radius:6px; font-weight:600;">💾 CSV</a>
+                </div>
+            </div>
+            <button onclick="loadHistoryTable()" style="color:#3498db; background:none; border:none; cursor:pointer; font-weight:bold; margin-top:10px;">🔄 Оновити</button>
+            <table id="history-table"><thead><tr><th>Час</th><th>Сенсор</th><th>Значення</th></tr></thead><tbody></tbody></table>
+        </div>
+    </div>
+
+    <script>
+        const sensorHistory = {}; const charts = {};
+        const thresholds = { "temp": { max: 30, min: -5 }, "wind": { max: 15 }, "uv": { max: 8 }, "air": { max: 100 } };
+
+        function openTab(n){document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));document.querySelectorAll('.tab-btn').forEach(e=>e.classList.remove('active'));document.getElementById(n).classList.add('active');document.querySelector(`.tab-btn[onclick="openTab('${n}')"]`).classList.add('active');if(n==='history')loadHistoryTable();}
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const sensors = {{ sensors | tojson }};
+            for (const [id, info] of Object.entries(sensors)) {
+                sensorHistory[id] = [];
+                const ctx = document.getElementById(`chart-${id}`).getContext('2d');
+                charts[id] = new Chart(ctx, { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#3498db', borderWidth: 2, tension: 0.4, pointRadius: 0, fill: true, backgroundColor: 'rgba(52, 152, 219, 0.05)' }] }, options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { display: false } }, animation: false } });
+            }
+            startWebSocket();
+        });
+
+        function startWebSocket() {
+            const ws = new WebSocket(`${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`);
+            ws.onmessage = (event) => {
+                const packet = JSON.parse(event.data);
+                if (packet.type === 'log') addLog(packet);
+                else updateDashboard(packet);
+            };
+            ws.onclose = () => setTimeout(startWebSocket, 3000);
+        }
+
+        function updateDashboard(data) {
+            const { sensor_id, value, timestamp } = data;
+            document.getElementById(`val-${sensor_id}`).innerHTML = `${value}<span class="unit">${data.unit}</span>`;
+            sensorHistory[sensor_id].push(value); if (sensorHistory[sensor_id].length > 100) sensorHistory[sensor_id].shift();
+            const arr = sensorHistory[sensor_id];
+            document.getElementById(`min-${sensor_id}`).innerText = Math.min(...arr); document.getElementById(`max-${sensor_id}`).innerText = Math.max(...arr); document.getElementById(`avg-${sensor_id}`).innerText = (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1);
+            const chart = charts[sensor_id]; if(chart) { chart.data.labels.push(timestamp); chart.data.datasets[0].data.push(value); if(chart.data.labels.length>30){chart.data.labels.shift();chart.data.datasets[0].data.shift();} chart.update(); }
+            const lim = thresholds[sensor_id]; const card = document.getElementById(`card-${sensor_id}`); if(lim && (value > lim.max || (lim.min !== undefined && value < lim.min))) card.classList.add("alert-mode"); else card.classList.remove("alert-mode");
+        }
+
+        function addLog(packet) {
+            const div = document.getElementById("console-logs");
+            const entry = document.createElement("div"); entry.className = "log-entry";
+            let cl = "log-info"; if(packet.level==="WARNING") cl="log-warning"; if(packet.level==="SYSTEM") cl="log-system";
+            entry.innerHTML = `<span class="log-time">${packet.time}</span> <span class="${cl}">[${packet.level}] ${packet.message}</span>`;
+            div.appendChild(entry); div.scrollTop = div.scrollHeight;
+        }
+
+        // --- ФУНКЦІЯ ЗМІНИ ШВИДКОСТІ ---
+        async function changeSpeed(val) {
+            await fetch('/set-interval', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ interval: parseFloat(val) }) 
+            });
+        }
+
+        async function controlSensor(id, act) { await fetch(`/${act}-sensor/${id}`, { method: 'POST' }); document.getElementById(`status-${id}`).innerText = act==='start'?"Active":"Stopped"; document.getElementById(`status-${id}`).className = act==='start'?"status-badge status-active":"status-badge status-stopped"; }
+        async function globalControl(ept) { await fetch(`/${ept}`, { method: 'POST' }); document.querySelectorAll('[id^="status-"]').forEach(el => { el.innerText = ept==='start-all'?"Active":"Stopped"; el.className = ept==='start-all'?"status-badge status-active":"status-badge status-stopped"; }); }
+        async function clearHistory() { if(confirm("Видалити історію?")) { await fetch('/clear-history', { method: 'DELETE' }); loadHistoryTable(); } }
+        async function loadHistoryTable() { const tb = document.querySelector('#history-table tbody'); tb.innerHTML='Loading...'; try{ const r = await fetch('/history'); const d = await r.json(); tb.innerHTML=''; d.forEach(row=>{ tb.innerHTML+=`<tr><td>${row.Time||row.Timestamp}</td><td>${row.Name}</td><td><b>${row.Value} ${row.Unit}</b></td></tr>`; }); } catch{tb.innerHTML='Error';} }
+    </script>
+</body>
+</html>

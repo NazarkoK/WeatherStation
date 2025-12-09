@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+
+venv/
+env/
+.env
+
+.vscode/
+
+# Історію погоди краще не заливати, хай вона створюється чистою на сервері
+weather_history.csv
+weather_log.csv
+
+.DS_Store
+Thumbs.db
