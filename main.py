@@ -20,9 +20,8 @@ templates = Jinja2Templates(directory="templates")
 
 CSV_FILE = "weather_history.csv"
 
-# --- ГЛОБАЛЬНІ НАЛАШТУВАННЯ ---
 SYSTEM_CONFIG = {
-    "update_interval": 3.0 # Початкова швидкість оновлення (сек)
+    "update_interval": 3.0
 }
 
 THRESHOLDS = {
@@ -32,7 +31,6 @@ THRESHOLDS = {
     "air": {"max": 100}
 }
 
-# --- Моделі даних ---
 class IntervalUpdate(BaseModel):
     interval: float
 
@@ -88,7 +86,6 @@ class SensorWorker:
                 self.current_value = round(random.uniform(self.min_val, self.max_val), 1)
                 log_to_csv(self.id, self.name, self.current_value, self.unit)
                 
-                # Перевірка лімітів
                 limits = THRESHOLDS.get(self.id)
                 if limits:
                     if self.current_value > limits.get("max", 999):
@@ -106,7 +103,6 @@ class SensorWorker:
                 }
                 await manager.broadcast(json.dumps(data))
             
-            # ВИКОРИСТОВУЄМО ГЛОБАЛЬНУ ЗМІННУ ІНТЕРВАЛУ
             await asyncio.sleep(SYSTEM_CONFIG["update_interval"])
 
     async def start(self):
@@ -135,14 +131,13 @@ async def startup_event():
     for sensor in sensors_list:
         asyncio.create_task(sensor.run())
 
-# --- Routes ---
 @app.get("/", response_class=HTMLResponse)
 async def get(request: Request):
     initial_state = {s.id: {"name": s.name, "unit": s.unit, "active": s.is_running} for s in sensors_list}
     return templates.TemplateResponse("index.html", {
         "request": request, 
         "sensors": initial_state,
-        "current_interval": SYSTEM_CONFIG["update_interval"] # Передаємо поточний інтервал
+        "current_interval": SYSTEM_CONFIG["update_interval"]
     })
 
 @app.websocket("/ws")
@@ -173,10 +168,9 @@ async def clear_history():
             csv.writer(file).writerow(["Time", "Sensor ID", "Name", "Value", "Unit"])
     return {"status": "cleared"}
 
-# --- НОВИЙ API ДЛЯ ЗМІНИ ШВИДКОСТІ ---
 @app.post("/set-interval")
 async def set_interval(update: IntervalUpdate):
-    new_interval = max(0.5, min(10.0, update.interval)) # Обмеження від 0.5с до 10с
+    new_interval = max(0.5, min(10.0, update.interval))
     SYSTEM_CONFIG["update_interval"] = new_interval
     await manager.broadcast_log("SYSTEM", f"Швидкість оновлення змінено на {new_interval} сек")
     return {"status": "updated", "interval": new_interval}
